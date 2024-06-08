@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>University File Share</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+</head>
+<body>
+    <div class="container animate__animated animate__fadeIn">
+        <h1>University File Share</h1>
+        <h2>Files:</h2>
+        <ul id="file-list"></ul>
+        <div class="footer">© 2024 University File Share</div>
+    </div>
+
+    <div class="upload-form">
+        <form action="/upload" method="post" enctype="multipart/form-data">
+            <input type="text" name="folder" placeholder="Folder (optional)">
+            <input type="file" name="file" required>
+            <button type="submit"><i class="fas fa-upload"></i> Upload</button>
+        </form>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/3.1.3/socket.io.min.js"></script>
+    <script>
+        const socket = io();
+
+        function updateFileList(files) {
+            const fileList = document.getElementById('file-list');
+            fileList.innerHTML = '';
+            files.forEach(file => {
+                const li = document.createElement('li');
+                const link = document.createElement('a');
+                link.href = `/download/${file}`;
+                link.textContent = file;
+                const icon = document.createElement('i');
+                icon.className = 'fas fa-download';
+                link.prepend(icon);
+                li.appendChild(link);
+                fileList.appendChild(li);
+            });
+        }
+
+        socket.on('file_list', (files) => {
+            updateFileList(files);
+        });
+
+        socket.emit('file_list');
+    </script>
+</body>
+</html>
