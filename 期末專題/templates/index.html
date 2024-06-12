@@ -4,46 +4,88 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>University File Share</title>
+    <title>Group 1 File Share</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+    <style>
+        .container {
+            margin: 0 auto;
+        }
+
+        .file-editor {
+            display: none;
+            position: fixed;
+            top: 50px;
+            right: 20px;
+            width: 500px;
+            height: 90%;
+        }
+
+        .editing .container {
+            margin-right: 520px;
+            /* Width of the editor + some margin */
+        }
+
+        .editing .file-editor {
+            display: block;
+        }
+
+        .button-group {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .button-group button {
+            margin-bottom: 10px;
+        }
+    </style>
 </head>
 
 <body>
-    <div class="container animate__animated animate__fadeIn">
-        <h1>University File Share</h1>
-        <h2>Files:</h2>
-        <ul id="file-list"></ul>
-        <div class="footer">通訊導論期末專題</div>
+    <div id="page-content" class="page-content">
+        <div class="container animate__animated animate__fadeIn">
+            <h1>Group 1 File Share</h1>
+            <div class="upload-form">
+                <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data">
+                    <input type="text" name="folder" placeholder="Folder (optional)" value="{{ subpath }}">
+                    <input type="file" name="file" required>
+                    <button type="submit"><i class="fas fa-upload"></i> Upload</button>
+                </form>
+            </div>
+            <h2>Files:</h2>
+            <ul id="file-list"></ul>
+            <div class="footer">© 2024 Group 1 File Share</div>
+        </div>
+        <div class="file-editor">
+            <h2 id="editor-filename"></h2>
+            <textarea id="editor-content" rows="20" cols="80" style="width: 100%; height: 80%;"></textarea>
+            <button id="save-button"><i class="fas fa-save"></i> Save</button>
+            <button id="download-button"><i class="fas fa-download"></i> Download</button>
+        </div>
     </div>
 
-    <div class="upload-form">
-        <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data">
-            <input type="text" name="folder" placeholder="Folder (optional)" value="{{ subpath }}">
-            <input type="file" name="file" required>
-            <button type="submit"><i class="fas fa-upload"></i> Upload</button>
-        </form>
+    <div class="button-group">
+        <button id="trash-button"><i class="fas fa-trash-alt"></i> View Trash</button>
+        <button id="keep-folder-button" onclick="viewKeep()"><i class="fas fa-star"></i> View Keep</button>
+        <button id="new-file-button"><i class="fas fa-file-alt"></i> New File</button>
+        <button id="empty-trash-button" style="display: none;"><i class="fas fa-trash"></i> Empty Trash</button>
     </div>
-
-    <div class="file-editor" style="display: none;">
-        <h2 id="editor-filename"></h2>
-        <textarea id="editor-content" rows="20" cols="80"></textarea>
-        <button id="save-button"><i class="fas fa-save"></i> Save</button>
-    </div>
-
-    <button id="new-file-button"><i class="fas fa-file-alt"></i> New File</button>
-    <button id="trash-button"><i class="fas fa-trash-alt"></i> View Trash</button>
-    <button id="empty-trash-button" style="display: none;"><i class="fas fa-trash"></i> Empty Trash</button>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/3.1.3/socket.io.min.js"></script>
     <script>
         const socket = io();
+        const pageContent = document.getElementById('page-content');
         const editorFilename = document.getElementById('editor-filename');
         const editorContent = document.getElementById('editor-content');
         const saveButton = document.getElementById('save-button');
+        const downloadButton = document.getElementById('download-button');
         const newFileButton = document.getElementById('new-file-button');
         const trashButton = document.getElementById('trash-button');
+        const keepFolderButton = document.getElementById('keep-folder-button');
         const emptyTrashButton = document.getElementById('empty-trash-button');
         const fileEditor = document.querySelector('.file-editor');
 
@@ -71,10 +113,10 @@
                 const li = document.createElement('li');
                 const link = document.createElement('a');
                 if (file.endsWith('.txt')) {
-                    link.href = `javascript:void(0);`;
+                    link.href = 'javascript:void(0);';
                     link.addEventListener('click', () => openFile(file, data.subpath));
                 } else {
-                    link.href = `/download/${data.subpath ? data.subpath + '/' : ''}${file}`;
+                    link.href = data.subpath === 'keep' ? `/download_keep/${file}` : `/download/${data.subpath ? data.subpath + '/' : ''}${file}`;
                     link.target = '_blank';
                 }
                 link.textContent = file;
@@ -95,6 +137,18 @@
                     deleteButton.innerHTML = '<i class="fas fa-trash"></i>';
                     deleteButton.addEventListener('click', () => deleteFile(file, data.subpath));
                     li.appendChild(deleteButton);
+
+                    // Add keep button for normal files
+                    const keepButton = document.createElement('button');
+                    keepButton.innerHTML = data.subpath === 'keep' ? '<i class="fas fa-star-half-alt"></i>' : '<i class="fas fa-star"></i>';
+                    keepButton.addEventListener('click', () => {
+                        if (data.subpath === 'keep') {
+                            unkeepFile(file);
+                        } else {
+                            keepFile(file, data.subpath);
+                        }
+                    });
+                    li.appendChild(keepButton);
                 }
 
                 fileList.appendChild(li);
@@ -106,7 +160,7 @@
 
         function openFile(filename, subpath) {
             socket.emit('open_file', { filename, subpath });
-            fileEditor.style.display = 'block';
+            pageContent.classList.add('editing');
         }
 
         function newFile() {
@@ -115,7 +169,7 @@
                 editorFilename.textContent = filename;
                 editorContent.value = '';
                 socket.emit('edit_file', { filename, content: '', subpath: '{{ subpath }}' });
-                fileEditor.style.display = 'block';
+                pageContent.classList.add('editing');
             }
         }
 
@@ -131,8 +185,24 @@
             }
         }
 
+        function keepFile(filename, subpath) {
+            if (confirm(`Are you sure you want to keep ${filename}?`)) {
+                socket.emit('keep_file', { filename, subpath });
+            }
+        }
+
+        function unkeepFile(filename) {
+            if (confirm(`Are you sure you want to unkeep ${filename}?`)) {
+                socket.emit('unkeep_file', { filename });
+            }
+        }
+
         function viewTrash() {
             socket.emit('file_list', { subpath: 'trash' });
+        }
+
+        function viewKeep() {
+            socket.emit('file_list', { subpath: 'keep' });
         }
 
         function emptyTrash() {
@@ -153,6 +223,15 @@
             const content = editorContent.value;
             const subpath = '{{ subpath }}';
             socket.emit('save_file', { filename, content, subpath });
+        });
+
+        downloadButton.addEventListener('click', () => {
+            const filename = editorFilename.textContent;
+            const subpath = '{{ subpath }}';
+            const downloadLink = document.createElement('a');
+            downloadLink.href = `/download_txt/${subpath ? subpath + '/' : ''}${filename}`;
+            downloadLink.target = '_blank';
+            downloadLink.click();
         });
 
         newFileButton.addEventListener('click', newFile);
@@ -184,6 +263,16 @@
             socket.emit('file_list', { subpath: 'trash' });
         });
 
+        socket.on('file_kept', (data) => {
+            alert('File kept successfully!');
+            socket.emit('file_list', { subpath: '{{ subpath }}' });
+        });
+
+        socket.on('file_unkept', (data) => {
+            alert('File unkept successfully!');
+            socket.emit('file_list', { subpath: 'keep' });
+        });
+
         socket.on('trash_emptied', () => {
             alert('Trash emptied successfully!');
             socket.emit('file_list', { subpath: 'trash' });
@@ -194,4 +283,3 @@
 </body>
 
 </html>
-
